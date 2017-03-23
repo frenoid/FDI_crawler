@@ -1,6 +1,5 @@
-# automated downloading of Signals from FDI markets 
-from sys import argv
-from sys import exit
+# automated downloading of Signals from FDI markets from sys import argv
+from sys import exit, argv
 from selenium import webdriver
 from selenium.webdriver.firefox.firefox_profile import FirefoxProfile
 from selenium.webdriver.common.by import By
@@ -17,24 +16,38 @@ from selenium.webdriver.support import expected_conditions as EC
 from datetime import date
 from datetime import timedelta
 from time import sleep
-from os import chdir, remove, rename, listdir
+from os import chdir, remove, rename, listdir, getcwd
+from shutil import copy, move
 from math import ceil
-from shutil import copy
+
+def readDownloadDir(config_file):
+	cwd = getcwd()
+	with open(config_file, "r") as config:
+		download_dir = config.readline()
+
+	try:
+		chdir(download_dir)
+		print "%s is the download directory" % (download_dir)
+	except OSError:
+		print "Cannot access %s" % (download_dir)
+		download_dir = "Invalid"
+
+	finally:
+		chdir(cwd)
+
+	return download_dir
 
 def browserInitialize(report_page):
 	profile = FirefoxProfile()
 
 	# .doc and .docx
-	profile.set_preference("browser.helperApps.neverAsk.saveToDisk",\
-			       "application/msword")
+	profile.set_preference("browser.download.folderList",2)
+	profile.set_preference("browser.download.manager.showWhenStarting","false")
+	profile.set_preference("browser.download.dir","c:/Users/faslxkn/Downloads/fdi_co_reports")
 	profile.set_preference("browser.helperApps.neverAsk.saveToDisk",\
 			       "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+	print "Set to auto-download .docx"
 
-	# .xls and xlsx
-	profile.set_preference("browser.helperApps.neverAsk.saveToDisk",\
-		               "application/vnd.ms-excel")
-	profile.set_preference("browser.helperApps.neverAsk.saveToDisk",\
-                               "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 	driver = webdriver.Firefox(firefox_profile = profile)
 	driver.get(report_page)
@@ -140,30 +153,6 @@ def getCompanyCount(driver):
 
 	return int(company_count_text)
 	
-
-def renameFile(downloaded_files, query_no, start_date, end_date):
-	rename_success = False
-
-	# Generate new filename = "<query#>_<start_date>_<end_date>.xls"
-	new_name =  str(query_no) + "_" +\
-                    str(start_date.year) + "-" + str(start_date.month) + "_" +\
-                    str(end_date.year) + "-" + str(end_date.month) +\
-                    ".xlsx"
-
-	for file_name in downloaded_files:
-		if (file_name[0:5] == "9940_" and file_name[-5:] == ".xlsx"):
-			try:
-				rename(file_name, new_name)
-				rename_success = True
-				print "%s renamed to %s" % (file_name, new_name)
-				break
-			except WindowsError:
-				print "%s used by another file" % (new_name)
-				break
-
-
-	return rename_success
-
 def set20RowsPerPage(driver):
 	success = False
 	try:
@@ -213,6 +202,18 @@ def getCompanyList(driver):
 
 	return company_list
 
+def getDownloadName(url):
+	filename = "Invalid"
+
+	try:
+		last_slash_idx = url.rindex("/")
+		filename = url[last_slash_idx+1:]
+	except ValueError:
+		print "Filename not found"
+
+	return filename
+
+
 
 def downloadReport(driver, download_dir, company_name, company_link):
 	# Click on report
@@ -220,45 +221,58 @@ def downloadReport(driver, download_dir, company_name, company_link):
 	print "Open report dialog"
 	sleep(3)
 
-	# Name report
-	name_report = WebDriverWait(driver,10).until(\
-		      EC.presence_of_element_located((By.XPATH,\
+	try:
+		# Name report
+		name_report = WebDriverWait(driver,30).until(\
+		      EC.element_to_be_clickable((By.XPATH,\
                       "/html/body/div[4]/div[2]/div/form/table[1]/tbody/tr/td[2]/a"))
 		      )
-	name_report.click()
-	print "Use default name"
-	sleep(1)
 
-	# Create report
-	create_report = WebDriverWait(driver,10).until(\
+		name_report.click()
+		print "Use default name for report"
+		sleep(3)
+
+		# Create report
+		create_report = WebDriverWait(driver,10).until(\
 		        EC.presence_of_element_located((By.XPATH,\
                         "/html/body/div[4]/div[11]/div/button[1]"))
 		        )
-	create_report.click()
-	sleep(5)
+		create_report.click()
+		print "Generating report"
 
-	# Wait for download link then click on it
-	download_elem = WebDriverWait(driver,80).until(\
+		# Wait for download link then click on it
+		download_elem = WebDriverWait(driver,85).until(\
 		        EC.presence_of_element_located((By.XPATH,\
                         "/html/body/div[5]/div[2]/div/div/div/a"))
 		        )
-	download_elem.click()
-	# download_link = download_elem.get_attribute("href")
-	print "Get report from %s" % (download_link)
 
+		download_elem.click()
+		download_link = download_elem.get_attribute("href")
+		download_name = getDownloadName(download_link)
+		print "Get report from %s" % (download_link)
+		sleep(1)
 
-
-
-	# Close the download dialog
-	close_button =  WebDriverWait(driver,10).until(\
+		# Close the download dialog
+		close_button =  WebDriverWait(driver,10).until(\
 		        EC.presence_of_element_located((By.XPATH,\
                         "/html/body/div[5]/div[11]/div/button"))
 			)
-	close_button.click()
-	sleep(1)
-	print "%s report is downloading" % (company_name)
+		close_button.click()
+		sleep(2)
+		print "%s report is downloading" % (company_name)
+	except(TimeoutException, NoSuchElementException, UnexpectedAlertPresentException):
+		print "!Exception encountered while downloading report"
+	finally:
+		# Close any dialog windows
+		try:
+			close_button = WebDriverWait(driver,3).until(\
+				       EC.presence_of_element_located((By.CLASS_NAME,\
+				       "ui-dialog-titlebar-close ui-corner-all ui-state-hover"))
+				       )
+		except(TimeoutException, NoSuchElementException, UnexpectedAlertPresentException):
+			pass
 
-	return
+	return download_name
 		        
 
 def goToPage(driver, page_no):
@@ -275,6 +289,53 @@ def goToPage(driver, page_no):
 	page_index.send_keys(str(page_no))
 
 	page_submit.click()
+
+	return
+
+def checkDownloadDirClear(download_dir):
+	dir_clear_status = True
+
+	file_names = listdir(download_dir)
+	for file_name in file_names:
+		if file_name[-5:] == ".part":
+			dir_clear_status = False
+			break
+
+	return dir_clear_status
+
+def sweepDownloadDir(download_dir, destination_dir):
+	file_names = listdir(download_dir)
+	files_moved_counter = 0
+
+	for file_name in file_names:
+		if file_name[-5:] == ".docx":
+			move(download_dir+"/"+file_name, destination_dir+"/"+file_name)
+			files_moved_counter += 1
+			# print str(file_name), "was moved to", str(destination_dir)
+
+	return files_moved_counter
+
+def renameFiles(filedir, filename_coname):
+	files_renamed_count = 0
+
+	for filename in filename_coname:
+		try:
+			newname = filename_coname[filename] + "_report.docx"
+			rename(filedir+"/"+filename, filedir+"/"+newname)
+			files_renamed_count += 1
+			# print "%s renamed to %s" % (filename, newname)
+
+		except OSError:
+			print newname, "already exists!" 
+
+	return files_renamed_count
+
+def writeFailLog(download_dir, page_no, failed_companies):
+	chdir(download_dir)
+	with open(fdi_company_failed_reports.log, "a") as fail_log:
+		fail_log.write("# On page", str(page_no), ": \n")
+		for failed_company in failed_companies:
+			fail_log.write(failed_company)
 
 	return
 
@@ -302,10 +363,17 @@ if __name__ == "__main__":
 		print("Syntax: report.py <Dest. Region> <query_type> [query no]")
 		exit("Insufficient arguments. At least 2")
 
+	print"*************************************"
+	print"fDi markets company report downloader"
+	print"*************************************"
+
 	# Initialize arguments
 	dest_region = argv[1]
 	query_type = argv[2]
-	download_dir = "C:/Users/faslxkn/Downloads"
+	download_dir = readDownloadDir("download_dir.txt")
+
+	if download_dir == "Invalid":
+		exit("Invalid download dir")	
 
 	print "Downloading dest_region: %s query_type: %s" % (dest_region, query_type)
 
@@ -371,10 +439,17 @@ if __name__ == "__main__":
 		download_pages = range(int(argv[3]), int(argv[4])+1)
 
 	download_pages = sorted(download_pages)
-	print download_pages
+	total_download_pages = len(download_pages)
+	if query_type == "all" or query_type == "range":
+		print "Downloading pages %d through %d" % (download_pages[0], download_pages[total_download_pages-1])
+	else:
+		print "Downloading pages: %s" % (str(download_pages))
 
 	# Iterate over pages
 	for page_no in download_pages:
+		filename_coname = {}
+		failed_companies = []
+
 		if page_no != 1:
 			goToPage(driver, page_no)
 			sleep(5)
@@ -385,90 +460,50 @@ if __name__ == "__main__":
 			company_list = getCompanyList(driver)
 			# Iterate over companies in page
 			for company_no, company_name in enumerate(company_list):
-				print "%d: %s" % (company_no+1, company_name)
+				print "* %d: %s" % (company_no+1, company_name)
 
 				try:
-					print "Downloading report for %s" % (company_name)
-					downloadReport(driver,download_dir,company_name, company_list[company_name])
+					download_name = downloadReport(driver,download_dir,company_name, company_list[company_name])
+					# print "File is %s" % (download_name)
+
+					filename_coname[download_name] = company_name
 				except(TimeoutException, NoSuchElementException):
 					print "!Error. Next firm"
+					failed_companies.append(company_name)
 
 				finally:
-					# Sweep .doc files into folder
 					pass
-		
 
 		except(TimeoutException, NoSuchElementException):
 			pass
 
 		finally:
+			clear_status = False
+			while clear_status != True:
+				clear_status = checkDownloadDirClear(download_dir)
+				if clear_status == False:
+					print "Download in progress. Wait 10 secs"
+					sleep(10)
+				else:
+					break
+
+			destination_dir = download_dir + "/fdi_co_reports" 
+			move_count = sweepDownloadDir(download_dir, destination_dir)
+			print "%d files were moved to %s"  % (move_count, destination_dir)
+
+			rename_count = renameFiles(destination_dir, filename_coname)
+			print "%d files were renamed" % (rename_count)
+
+			if len(failed_companies) > 0:
+				writeFailLog(download_dir, page_no, failed_comapanies)
+				print "%d failed reports written to log" % (len(failed_comapnies))
+
 			driver.switch_to_window(main_window)
 			print "Next page"
-			print "=========="
+			print "===================="
 
-		"""
-		try:
-			# Create filters: Source country + date range
-			if(query_no == 1):
-				chooseSourceCountry(driver, source_country)
-				print "%s selected as Source Country" % (source_country)
-	
-			sleep(3)
-			chooseDateRange(start_date.year, start_date.month, end_date.year, end_date.month)
-	
-			# Confirm the search criteria and choose database
-			sleep(6)
-
-			signal_count = getSignalCount(driver)
-
-			# Case where there are zero signals found
-			# Create a dummy file, rename it according to the query no
-			# Proceed to next query
-			if signal_count == 0:
-				copy("C:/Selenium/fdi_markets/zero_signal_file.xlsx", "C:/Users/faslxkn/Downloads/9940_zerosignals.xlsx")
-				print "Zero signal file created in downloads"
-
-				# Rename downloaded file appropriately
-				chdir("C:/Users/faslxkn/Downloads")
-				downloaded_files = listdir("C:/Users/faslxkn/Downloads")
-				rename_success = renameFile(downloaded_files, query_no, start_date, end_date)
-				if rename_success == False:
-					print "Renaming dummy file was unsuccessful"
-
-				continue	
-
-			
-
-			# Where signal count is not zero, proceed to search database
-			database = WebDriverWait(driver, 15).until(\
-		   	   	   EC.element_to_be_clickable((By.XPATH, "/html/body/center/div/div[1]/table/tbody/tr[2]/td/div[1]/a[2]"))
-                   	   	   )
-			database.click()
-			print "Searching database"
-			sleep(3)
-
-
-			# 4: Export the data in excel format and download
-
-			close_button = driver.find_element(By.XPATH, "/html/body/div[3]/div[11]/div/button")   
-			close_button.click()
-
-
-			# Rename downloaded file appropriately
-			chdir("C:/Users/faslxkn/Downloads")
-			downloaded_files = listdir("C:/Users/faslxkn/Downloads")
-			rename_success = renameFile(downloaded_files, query_no, start_date, end_date)
-			if rename_success == False:
-				print "Renaming was unsuccessful"		
-
-		except (TimeoutException, UnexpectedAlertPresentException, NoSuchElementException):
-			print "!Exception! Next batch."     
-			driver.refresh()
-		"""
 
 	# Logout and close the browser
 	fdiLogout(driver, main_window)
-
-
 
 	print "Script End"
