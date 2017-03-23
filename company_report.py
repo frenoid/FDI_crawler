@@ -307,6 +307,13 @@ def sweepDownloadDir(download_dir, destination_dir):
 	file_names = listdir(download_dir)
 	files_moved_counter = 0
 
+	# test if dest_dir exists, if not, mkdir
+	try:
+		listdir(destination_dir)
+	except WindowsError:
+		mkdir(destination_dir)
+
+	# Move downloaded files into storage_dir
 	for file_name in file_names:
 		if file_name[-5:] == ".docx":
 			move(download_dir+"/"+file_name, destination_dir+"/"+file_name)
