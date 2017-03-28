@@ -217,6 +217,7 @@ def getDownloadName(url):
 
 def downloadReport(driver, download_dir, company_name, company_link):
 	# Click on report
+	download_name = "Invalid"
 	company_link.click()
 	print "Open report dialog"
 	sleep(3)
@@ -273,6 +274,16 @@ def downloadReport(driver, download_dir, company_name, company_link):
 			pass
 
 	return download_name
+
+def closeExtraWindows(driver, main_window):
+    for win_handle in driver.window_handles:
+        if win_handle != main_window:
+            driver.switch_to_window(win_handle)
+            driver.close()
+
+    driver.switch_to_window(main_window)
+
+    return
 		        
 
 def goToPage(driver, page_no):
@@ -472,17 +483,17 @@ if __name__ == "__main__":
 				try:
 					download_name = downloadReport(driver,download_dir,company_name, company_list[company_name])
 					# print "File is %s" % (download_name)
-
-					filename_coname[download_name] = company_name
+					if download_name != "Invalid":
+						filename_coname[download_name] = company_name
 				except(TimeoutException, NoSuchElementException):
 					print "!Error. Next firm"
 					failed_companies.append(company_name)
 
 				finally:
-					pass
+					closeExtraWindows(driver, main_window)
 
 		except(TimeoutException, NoSuchElementException):
-			pass
+			print "!Exception while changing pages"
 
 		finally:
 			clear_status = False
