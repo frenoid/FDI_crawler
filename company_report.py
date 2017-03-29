@@ -15,7 +15,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from datetime import date
 from datetime import timedelta
-from time import sleep
+from time import sleep, time
 from os import chdir, remove, rename, listdir, getcwd
 from shutil import copy, move
 from math import ceil
@@ -23,7 +23,7 @@ from math import ceil
 def readDownloadDir(config_file):
 	cwd = getcwd()
 	with open(config_file, "r") as config:
-		download_dir = config.readline()
+		download_dir = config.readline().rstrip("\n")
 
 	try:
 		chdir(download_dir)
@@ -447,6 +447,7 @@ if __name__ == "__main__":
 		exit("Company_count or page_total is 0")
 
 	# Initiate the download list
+        print "***** Initiate download list *****"
 	download_pages = []
 	if(query_type == "all"):
 		download_pages = range(1, page_total+1)
@@ -467,6 +468,8 @@ if __name__ == "__main__":
 	for page_no in download_pages:
 		filename_coname = {}
 		failed_companies = []
+                time_spent_downloading = 0
+                download_count = 0
 
 		if page_no != 1:
 			goToPage(driver, page_no)
@@ -479,6 +482,7 @@ if __name__ == "__main__":
 			# Iterate over companies in page
 			for company_no, company_name in enumerate(company_list):
 				print "* %d: %s" % (company_no+1, company_name)
+                                time_start = time()
 
 				try:
 					download_name = downloadReport(driver,download_dir,company_name, company_list[company_name])
@@ -491,6 +495,16 @@ if __name__ == "__main__":
 
 				finally:
 					closeExtraWindows(driver, main_window)
+
+                                        download_count += 1
+                                        time_end = time()
+                                        time_elapsed = time_end - time_start
+                                        time_spent_downloading += time_elapsed
+                                        print "%.1f seconds spent on download" % (time_elapsed)
+                                        print "%.1f on average per download" % (time_spent_downloading\
+                                                                                /float(download_count))
+
+
 
 		except(TimeoutException, NoSuchElementException):
 			print "!Exception while changing pages"
