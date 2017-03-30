@@ -236,7 +236,7 @@ def downloadReport(driver, download_dir, company_name, company_link):
 		# Create report
 		create_report = WebDriverWait(driver,10).until(\
 		        EC.presence_of_element_located((By.XPATH,\
-                        "/html/body/div[4]/div[11]/div/button[1]"))
+                        "/html/body/div[4]/div[11]/div/button[1]"))\
 		        )
 		create_report.click()
 		print "Generating report"
@@ -246,7 +246,10 @@ def downloadReport(driver, download_dir, company_name, company_link):
 		        EC.presence_of_element_located((By.XPATH,\
                         "/html/body/div[5]/div[2]/div/div/div/a"))
 		        )
-
+                download_elem = WebDriverWait(driver,15).until(\
+                        EC.element_to_be_clickable((By.XPATH,\
+                        "/html/body/div[5]/div[2]/div/div/div/a"))
+                        )
 		download_elem.click()
 		download_link = download_elem.get_attribute("href")
 		download_name = getDownloadName(download_link)
@@ -371,7 +374,7 @@ def fdiLogout(driver, main_window):
 		print "!Exception encountered during logout"
 	
 	finally: 
-		driver.close()
+		driver.quit()
 
 	return
 
