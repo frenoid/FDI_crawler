@@ -75,73 +75,6 @@ def fdiLogin(driver, user_id, user_password):
 
 	return driver
 
-
-def openSearchMenu(driver):
-
-
-	# Start new search
-	search_menu = WebDriverWait(driver, 15).until(\
-                      EC.presence_of_element_located((By.ID, "search_nav_button"))
-		      )
-	search_menu.click()
-
-	search_select = WebDriverWait(driver, 15).until(\
-	                EC.presence_of_element_located((By.ID, "search_select"))
-			)
-	
-
-	return
-
-
-def chooseDestRegion(driver, region):
-
-
-	# Choose filter criteria: Source Country
-	search_select =  WebDriverWait(driver, 15).until(\
-                         EC.presence_of_element_located((By.ID, "search_select"))
-			 )
-	search_select.click()
-	search_select_source = WebDriverWait(driver, 15).until(\
-			       EC.presence_of_element_located((By.XPATH,\
-                               "/html/body/center/div/div[3]/div[1]/table/tbody/tr/td/div[3]/table/tbody/tr/td[2]/select/option[2]"))
-			       )
-	search_select_source.click()
-	sleep(3)
-
-	# Enter the Source Country name
-
-	""" Code to search only countries
-	search_level = WebDriverWait(driver, 15).until(\
-		       EC.presence_of_element_located((By.ID, "search_level"))
-		       )
-	search_level.click()
-	search_level_country = WebDriverWait(driver, 15).until(\
-			       EC.presence_of_element_located((By.XPATH, "/html/body/center/div/div[3]/div[1]/table/tbody/tr/td/div[2]/div/div[1]/table/tbody/tr/td[1]/select/option[3]"))
-                               )
-	search_level_country.click()
-	"""
-
-	search_term = driver.find_element(By.ID, "search_term")
-	search_term.send_keys(country)
-	search_button = driver.find_element(By.ID, "search_button")
-	search_button.click()
-	search_button.click()
-	sleep(3)
-
-	add_country =  WebDriverWait(driver, 20).until(\
-		       EC.presence_of_element_located((By.XPATH, "/html/body/center/div/div[3]/div[1]/table/tbody/tr/td/div[2]/div/div[1]/div[1]/table/tbody/tr[2]/td[5]/a[1]/strong"))
-		       )
-	add_country.click()
-	sleep(3)
-	confirm_selection = WebDriverWait(driver, 15).until(\
-                            EC.presence_of_element_located((By.XPATH, "/html/body/center/div/div[3]/div[1]/table/tbody/tr/td/div[2]/div/div[3]/div[1]/a/span/span"))
-			    )
-	confirm_selection.click()
-	sleep(5)
-
-	return True
-
-
 def getCompanyCount(driver):
 
 	company_count_elem = WebDriverWait(driver, 30).until(\
@@ -287,6 +220,22 @@ def closeExtraWindows(driver, main_window):
     driver.switch_to_window(main_window)
 
     return
+
+def getPageNo(driver):
+    page_no = 0
+
+    try:
+        page_no = WebDriverWait(driver,30).until(\
+                  EC.presence_of_element_located((By.ID,\
+                  "page_index"))
+                  )
+        page_no = page_no.get_attribute("value")
+        print "Current page is", str(page_no)
+
+    except TimeoutException:
+        print "!Exception when reading the page number"
+
+    return int(page_no)
 		        
 
 def goToPage(driver, page_no):
@@ -336,12 +285,14 @@ def sweepDownloadDir(download_dir, destination_dir):
 
 	return files_moved_counter
 
-def renameFiles(filedir, filename_coname):
+def renameFiles(filedir, filename_coname, page_no):
 	files_renamed_count = 0
 
 	for filename in filename_coname:
 		try:
-			newname = filename_coname[filename] + "_report.docx"
+			newname = "p" + str(page_no) + "_"\
+                                  + filename_coname[filename]\
+                                  + "_report.docx"
 			rename(filedir+"/"+filename, filedir+"/"+newname)
 			files_renamed_count += 1
 			# print "%s renamed to %s" % (filename, newname)
@@ -381,7 +332,7 @@ def fdiLogout(driver, main_window):
 ### Main() ###
 if __name__ == "__main__":
 	if(len(argv) < 2):
-		print("Syntax: report.py <Dest. Region> <query_type> [query no]")
+		print("Syntax: report.py <query_type> [query no]")
 		exit("Insufficient arguments. At least 2")
 
 	print"*************************************"
@@ -389,14 +340,13 @@ if __name__ == "__main__":
 	print"*************************************"
 
 	# Initialize arguments
-	dest_region = argv[1]
-	query_type = argv[2]
+	query_type = argv[1]
 	download_dir = readDownloadDir("download_dir.txt")
 
 	if download_dir == "Invalid":
 		exit("Invalid download dir")	
 
-	print "Downloading dest_region: %s query_type: %s" % (dest_region, query_type)
+	print "Downloading query_type: %s" % (query_type)
 
 	# Initialize the browser and load FDI markets
 	report_page = "https://app.fdimarkets.com/markets/index.cfm"
@@ -407,7 +357,6 @@ if __name__ == "__main__":
 	driver = fdiLogin(driver, "sooyeon.kim@nus.edu.sg", "ksooyeonGPN@NUS999")
 	sleep(3)
 	main_window = driver.current_window_handle
-	# openSearchMenu(driver)
 	print "Main page reached"
 
 	# Check that default view is Company Database
@@ -455,10 +404,10 @@ if __name__ == "__main__":
 	if(query_type == "all"):
 		download_pages = range(1, page_total+1)
 	elif(query_type == "list"):
-		download_pages.extend(argv[3:])
+		download_pages.extend(argv[2:])
 		download_pages = [int(x) for x in download_pages]
 	elif(query_type == "range"):
-		download_pages = range(int(argv[3]), int(argv[4])+1)
+		download_pages = range(int(argv[2]), int(argv[3])+1)
 
 	download_pages = sorted(download_pages)
 	total_download_pages = len(download_pages)
@@ -473,8 +422,9 @@ if __name__ == "__main__":
 		failed_companies = []
                 time_spent_downloading = 0
                 download_count = 0
+                current_page_no = getPageNo(driver)
 
-		if page_no != 1:
+		if page_no != current_page_no or page_no == 0:
 			goToPage(driver, page_no)
 			sleep(5)
 
@@ -494,11 +444,11 @@ if __name__ == "__main__":
 						filename_coname[download_name] = company_name
 				except(TimeoutException, NoSuchElementException):
 					print "!Error. Next firm"
+                                        driver.get(driver.current_url)
 					failed_companies.append(company_name)
 
 				finally:
 					closeExtraWindows(driver, main_window)
-
                                         download_count += 1
                                         time_end = time()
                                         time_elapsed = time_end - time_start
@@ -506,8 +456,6 @@ if __name__ == "__main__":
                                         print "%.1f seconds spent on download" % (time_elapsed)
                                         print "%.1f on average per download" % (time_spent_downloading\
                                                                                 /float(download_count))
-
-
 
 		except(TimeoutException, NoSuchElementException):
 			print "!Exception while changing pages"
@@ -526,7 +474,7 @@ if __name__ == "__main__":
 			move_count = sweepDownloadDir(download_dir, destination_dir)
 			print "%d files were moved to %s"  % (move_count, destination_dir)
 
-			rename_count = renameFiles(destination_dir, filename_coname)
+			rename_count = renameFiles(destination_dir, filename_coname, page_no)
 			print "%d files were renamed" % (rename_count)
 
 			if len(failed_companies) > 0:
