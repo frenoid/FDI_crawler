@@ -11,6 +11,7 @@ from selenium.common.exceptions import NoAlertPresentException
 from selenium.common.exceptions import NoSuchElementException
 from selenium.common.exceptions import WebDriverException
 from selenium.common.exceptions import ElementNotVisibleException
+from selenium.common.exceptions import StaleElementReferenceException
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from datetime import date
@@ -107,25 +108,30 @@ def set20RowsPerPage(driver):
 def getPageTotal(driver, company_count, rows_per_page):
 	return int(ceil(float(company_count)/float(rows_per_page)))
 
+def getCompanyNameAndLink(driver, company_no):
+
+        company_name = WebDriverWait(driver,10).until(\
+                   EC.presence_of_element_located((By.XPATH,\
+                   "/html/body/center/div/div[3]/div/div[2]/div/div/table[1]/tbody/tr["\
+                   +str(company_no)+\
+                   "]/td[1]/a"))
+                    )
+        company_link = WebDriverWait(driver,10).until(\
+         	       EC.presence_of_element_located((By.XPATH,\
+                       "/html/body/center/div/div[3]/div/div[2]/div/div/table[1]/tbody/tr["
+                       +str(company_no)+\
+		       "]/td[7]/a"))
+                       )
+                        
+        return company_name, company_link
+
 def getCompanyList(driver):
 	print "Getting companies in page"
 	company_list = {}
 	row_no = 1
 	while True:
 		try:
-			company_name = WebDriverWait(driver,10).until(\
-			               EC.presence_of_element_located((By.XPATH,\
-			               "/html/body/center/div/div[3]/div/div[2]/div/div/table[1]/tbody/tr["\
-			               +str(row_no)+\
-			               "]/td[1]/a"))
-			               )
-			company_link = WebDriverWait(driver,10).until(\
-				       EC.presence_of_element_located((By.XPATH,\
-                                       "/html/body/center/div/div[3]/div/div[2]/div/div/table[1]/tbody/tr["
-                                       +str(row_no)+\
-				       "]/td[7]/a"))
-                                       )
-			# print "Company %d is %s" % (row_no, company_link.text)
+		        company_name, company_link = getCompanyNameAndLink(driver, row_no)
 			company_list[company_name.text] = company_link
 			row_no += 1
 		except (TimeoutException, UnexpectedAlertPresentException, NoSuchElementException):
@@ -230,7 +236,7 @@ def getPageNo(driver):
                   "page_index"))
                   )
         page_no = page_no.get_attribute("value")
-        print "Current page is", str(page_no)
+        # print "Current page is", str(page_no)
 
     except TimeoutException:
         print "!Exception when reading the page number"
@@ -407,7 +413,10 @@ if __name__ == "__main__":
 		download_pages.extend(argv[2:])
 		download_pages = [int(x) for x in download_pages]
 	elif(query_type == "range"):
-		download_pages = range(int(argv[2]), int(argv[3])+1)
+                if argv[3] == "end":
+                    download_pages = range(int(argv[2]), page_total+1)
+                else:
+		    download_pages = range(int(argv[2]), int(argv[3])+1)
 
 	download_pages = sorted(download_pages)
 	total_download_pages = len(download_pages)
@@ -432,18 +441,20 @@ if __name__ == "__main__":
 
 		try:
 			company_list = getCompanyList(driver)
+                        page_company_count = len(company_list)
 			# Iterate over companies in page
-			for company_no, company_name in enumerate(company_list):
-				print "* %d: %s" % (company_no+1, company_name)
+                        for company_no in range(page_company_count): 
                                 time_start = time()
 
 				try:
-					download_name = downloadReport(driver,download_dir,company_name, company_list[company_name])
+                                        company_name, company_link = getCompanyNameAndLink(driver, company_no+1)
+				        print "* %d: %s" % (company_no+1, company_name.text)
+					download_name = downloadReport(driver,download_dir,company_name.text, company_link)
 					# print "File is %s" % (download_name)
 					if download_name != "Invalid":
-						filename_coname[download_name] = company_name
-				except(TimeoutException, NoSuchElementException):
-					print "!Error. Next firm"
+						filename_coname[download_name] = company_name.text
+				except(TimeoutException, NoSuchElementException, StaleElementReferenceException) as ex:
+                                        print "!Exception:", ex, "Go to next firm"
                                         driver.get(driver.current_url)
 					failed_companies.append(company_name)
 
