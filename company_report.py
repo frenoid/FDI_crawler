@@ -134,8 +134,8 @@ def getCompanyList(driver):
 		        company_name, company_link = getCompanyNameAndLink(driver, row_no)
 			company_list[company_name.text] = company_link
 			row_no += 1
-		except (TimeoutException, UnexpectedAlertPresentException, NoSuchElementException):
-			print "End of list table"
+		except (TimeoutException, UnexpectedAlertPresentException,\
+                        NoSuchElementException, StaleElementReferenceException):
 			print "%d Companies found in page" % (len(company_list))
 			break
 
@@ -205,6 +205,7 @@ def downloadReport(driver, download_dir, company_name, company_link):
 		print "%s report is downloading" % (company_name)
 	except(TimeoutException, NoSuchElementException, UnexpectedAlertPresentException):
 		print "!Exception encountered while downloading report"
+                print "Next report"
                 driver.get(driver.current_url)
 	finally:
 		# Close any dialog windows
@@ -306,6 +307,9 @@ def renameFiles(filedir, filename_coname, page_no):
 
 		except OSError:
 			print newname, "already exists!" 
+
+                except KeyError:
+                        print filename, "has no corresponding co_name"
 
 	return files_renamed_count
 
@@ -437,15 +441,18 @@ if __name__ == "__main__":
                 download_count = 0
                 current_page_no = getPageNo(driver)
 
-		if page_no != current_page_no or page_no == 0:
+                # Go to the correct page number
+                while(page_no != current_page_no or current_page_no == 0):
 			goToPage(driver, page_no)
+                        current_page_no = getPageNo(driver)
 			sleep(5)
 
 		print "***** Page #%d *****" % (page_no)
-
 		try:
+                        # Get the names and numbers of company on the page
 			company_list = getCompanyList(driver)
                         page_company_count = len(company_list)
+
 			# Iterate over companies in page
                         for company_no in range(page_company_count): 
                                 time_start = time()
@@ -472,8 +479,8 @@ if __name__ == "__main__":
                                         print "%.1f on average per download" % (time_spent_downloading\
                                                                                 /float(download_count))
 
-		except(TimeoutException, NoSuchElementException):
-			print "!Exception while changing pages"
+		except(TimeoutException, NoSuchElementException, StaleElementReferenceException) as ex:
+                        print "!Exception while changing pages:", str(ex)
 
 		finally:
 			clear_status = False
