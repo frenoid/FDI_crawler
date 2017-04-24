@@ -163,7 +163,7 @@ def downloadReport(driver, download_dir, company_name, company_link):
 
 	try:
 		# Name report
-		name_report = WebDriverWait(driver,30).until(\
+		name_report = WebDriverWait(driver,60).until(\
 		      EC.element_to_be_clickable((By.XPATH,\
                       "/html/body/div[4]/div[2]/div/form/table[1]/tbody/tr/td[2]/a"))
 		      )
@@ -205,6 +205,7 @@ def downloadReport(driver, download_dir, company_name, company_link):
 		print "%s report is downloading" % (company_name)
 	except(TimeoutException, NoSuchElementException, UnexpectedAlertPresentException):
 		print "!Exception encountered while downloading report"
+                driver.get(driver.current_url)
 	finally:
 		# Close any dialog windows
 		try:
@@ -383,6 +384,8 @@ if __name__ == "__main__":
 	except TimeoutException:
 		exit("Failed to get company count")
 
+        no_rows = 10
+        """
 	# Set number of rows per page to predetermined value
 	attempt_no = 0
 	success = False
@@ -394,9 +397,10 @@ if __name__ == "__main__":
 	else:
 		sleep(10)
 		print "Rows set to 20 per page"
+        """
 
 	# Get number of pages available
-	page_total = getPageTotal(driver, company_count, 20)
+	page_total = getPageTotal(driver, company_count, no_rows)
 
 	# Check if all values are intialized properly
 	if(company_count>0 and page_total>0):
